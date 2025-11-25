@@ -66,7 +66,7 @@ def ensure_table(conn):
 
 def upsert_books(conn, rows):
     """
-    Wstawia lub aktualizuje rekordy. Używamy executemany — prosty i czytelny.
+    Insert or update book records in the database.
     """
     insert_sql = """
     INSERT INTO books (id, title, author, genre, publisher, year, price)
@@ -105,5 +105,5 @@ if __name__ == "__main__":
         ensure_table(conn)
         upsert_books(conn, books)
         conn.commit()
-        print("Wstawiono/aktualizowano wiersze.")
+        print("Inserted/Updated books successfully.")
 
