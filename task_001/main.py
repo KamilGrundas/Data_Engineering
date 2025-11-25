@@ -14,40 +14,53 @@ DB_NAME = os.getenv("PGDATABASE", "library_db")
 DB_USER = os.getenv("PGUSER", "postgres")
 DB_PASSWORD = os.getenv("PGPASSWORD", "postgres")
 
+
 def load_data(path: Path) -> str:
     with open(path, "r", encoding="utf-8", errors="replace") as file:
         text = file.read()
     return text
 
+
 def fix_json_data(text: str) -> str:
     keys = [":id", ":title", ":author", ":genre", ":publisher", ":year", ":price"]
-    fixed_text = text.replace("=>",":")
+    fixed_text = text.replace("=>", ":")
     for key in keys:
-        fixed_text = fixed_text.replace(f'{key}', f'"{key.replace(":", "")}"')
-    
+        fixed_text = fixed_text.replace(f"{key}", f'"{key.replace(":", "")}"')
+
     return fixed_text
+
 
 def save_fixed_json_file(path: Path, load_json) -> None:
     with open(path, "w", encoding="utf-8") as file:
         json.dump(load_json, file, indent=4, ensure_ascii=False)
 
-def normalize_price(price: str) -> Decimal:
-    return Decimal(price.replace('$', '').replace("€", ""))
+
+def normalize_price(raw_price: str) -> tuple[Decimal, str]:
+    if "$" in raw_price:
+        currency = "USD"
+    else:
+        currency = "EUR"
+    price = Decimal(raw_price.replace("$", "").replace("€", ""))
+    return price, currency
+
 
 def json_to_rows(load_json: Any) -> list[tuple]:
     books = []
     for book in load_json:
+        price, currency = normalize_price(book["price"])
         row = (
-            str(book['id']), # id number is too big for BIGINT
-            book['title'],
-            book['author'],
-            book['genre'],
-            book['publisher'],
-            int(book['year']),
-            normalize_price(book['price'])
+            str(book["id"]),  # id number is too big for BIGINT
+            book["title"],
+            book["author"],
+            book["genre"],
+            book["publisher"],
+            int(book["year"]),
+            price,
+            currency,
         )
         books.append(row)
     return books
+
 
 def ensure_table(conn):
     create_sql = """
@@ -58,26 +71,29 @@ def ensure_table(conn):
         genre TEXT,
         publisher TEXT,
         year INTEGER,
-        price NUMERIC(10,2)
+        price NUMERIC(10,2),
+        currency VARCHAR(3)
     );
     """
     with conn.cursor() as cur:
         cur.execute(create_sql)
+
 
 def upsert_books(conn, rows):
     """
     Insert or update book records in the database.
     """
     insert_sql = """
-    INSERT INTO books (id, title, author, genre, publisher, year, price)
-    VALUES (%s, %s, %s, %s, %s, %s, %s)
+    INSERT INTO books (id, title, author, genre, publisher, year, price, currency)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     ON CONFLICT (id) DO UPDATE
     SET title = EXCLUDED.title,
         author = EXCLUDED.author,
         genre = EXCLUDED.genre,
         publisher = EXCLUDED.publisher,
         year = EXCLUDED.year,
-        price = EXCLUDED.price;
+        price = EXCLUDED.price,
+        currency = EXCLUDED.currency;
     """
     with conn.cursor() as cur:
         cur.executemany(insert_sql, rows)
@@ -101,9 +117,8 @@ if __name__ == "__main__":
         "user": DB_USER,
         "password": DB_PASSWORD,
     }
-    with psycopg.connect(**conninfo) as conn: # type: ignore
+    with psycopg.connect(**conninfo) as conn:  # type: ignore
         ensure_table(conn)
         upsert_books(conn, books)
         conn.commit()
         print("Inserted/Updated books successfully.")
-
