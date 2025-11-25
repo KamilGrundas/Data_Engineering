@@ -93,7 +93,7 @@ if __name__ == "__main__":
     books = json_to_rows(load_json)
     # for book in books:
     #     if book[0] > 9223372036854775807:
-    #         raise ValueError(f"ID {book[0]} przekracza maksymalną wartość dla BIGINT.")
+    #         raise ValueError(f"ID {book[0]} exceeds BIGINT limit.")
     conninfo = {
         "host": DB_HOST,
         "port": DB_PORT,
